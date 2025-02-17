@@ -3,7 +3,7 @@
 """
 Practical for master course 'Reinforcement Learning',
 Leiden University, The Netherlands
-By Thomas Moerland
+By Thomas Moerland 
 """
 
 import numpy as np
