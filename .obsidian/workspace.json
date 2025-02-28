@@ -4,17 +4,21 @@
     "type": "split",
     "children": [
       {
-        "id": "7914f93673ef479c",
+        "id": "6991fef109cb8985",
         "type": "tabs",
         "children": [
           {
-            "id": "ffa850d81bbb8a6c",
+            "id": "266881a81d7f44f8",
             "type": "leaf",
             "state": {
-              "type": "empty",
-              "state": {},
+              "type": "markdown",
+              "state": {
+                "file": "L3/Lecture 3.md",
+                "mode": "source",
+                "source": false
+              },
               "icon": "lucide-file",
-              "title": "New tab"
+              "title": "Lecture 3"
             }
           }
         ]
@@ -74,7 +78,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 300
+    "width": 217.5
   },
   "right": {
     "id": "f02fccae539cc8d9",
@@ -90,6 +94,7 @@
             "state": {
               "type": "backlink",
               "state": {
+                "file": "L3/Lecture 3.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -99,7 +104,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks"
+              "title": "Backlinks for Lecture 3"
             }
           },
           {
@@ -108,11 +113,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
+                "file": "L3/Lecture 3.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Outgoing links"
+              "title": "Outgoing links from Lecture 3"
             }
           },
           {
@@ -136,15 +142,17 @@
             "state": {
               "type": "outline",
               "state": {
+                "file": "L3/Lecture 3.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline"
+              "title": "Outline of Lecture 3"
             }
           }
-        ]
+        ],
+        "currentTab": 3
       }
     ],
     "direction": "horizontal",
@@ -161,8 +169,11 @@
       "command-palette:Open command palette": false
     }
   },
-  "active": "ffa850d81bbb8a6c",
+  "active": "266881a81d7f44f8",
   "lastOpenFiles": [
-    "L2/notes.md"
+    "L2/Lecture 2.md",
+    "L3/Lecture 3.md",
+    "A0/Assignment_0.pdf",
+    "RL_book.pdf"
   ]
 }
