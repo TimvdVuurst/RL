@@ -19,32 +19,36 @@ class BaseAgent:
         self.Q_sa = np.zeros((n_states,n_actions))
         
     def select_action(self, s, policy='egreedy', epsilon=None, temp=None):
-        
+        policy = policy.lower()
         if policy == 'greedy':
-            # TO DO: Add own code
-            a = np.random.randint(0,self.n_actions) # Replace this with correct action selection
-            
+            a = argmax(self.Q_sa[s])
+
         elif policy == 'egreedy':
             if epsilon is None:
                 raise KeyError("Provide an epsilon")
-                
-            # TO DO: Add own code
-            a = np.random.randint(0,self.n_actions) # Replace this with correct action selection
-                 
-        elif policy == 'softmax':
+            
+            elif epsilon >= np.random.rand(): # Random possibility for random motion
+                a = np.random.choice(self.n_actions)
+            else:
+                a = argmax(self.Q_sa[s])  # Otherwise greedy choice
+           
+        elif policy == 'softmax' or policy == 'boltzmann':
             if temp is None:
                 raise KeyError("Provide a temperature")
-                
-            # TO DO: Add own code
-            a = np.random.randint(0,self.n_actions) # Replace this with correct action selection
-              
+           
+            pi_a = softmax(self.Q_sa[s],temp)
+            a = argmax(pi_a) # Take the best action from this policy
+
+        else:
+            raise ValueError("Invalid policy given.")
+        
         return a
         
     def update(self):
         raise NotImplementedError('For each agent you need to implement its specific back-up method') # Leave this and overwrite in subclasses in other files
 
 
-    def evaluate(self,eval_env,n_eval_episodes=30, max_episode_length=100):
+    def evaluate(self,eval_env,n_eval_episodes=30, max_episode_length=100, verbose = False):
         returns = []  # list to store the reward per episode
         for i in range(n_eval_episodes):
             s = eval_env.reset()

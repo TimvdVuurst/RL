@@ -18,6 +18,9 @@ class QValueIterationAgent:
         self.n_actions = n_actions
         self.gamma = gamma
         self.Q_sa = np.zeros((n_states,n_actions))
+        self.reset_Delta()
+    
+    def reset_Delta(self):
         self.Delta = 0
 
     def select_action(self,s):
@@ -39,6 +42,7 @@ def Q_value_iteration(env, gamma=1.0, threshold=0.001):
 
     i = 0
     while QIagent.Delta > threshold or i == 0: #Stopping (and starting) condition
+        QIagent.reset_Delta() #set Delta to 0  
         #Loop over all states and actions
         for s in range(QIagent.n_states):
             for a in range(QIagent.n_actions):
@@ -47,7 +51,7 @@ def Q_value_iteration(env, gamma=1.0, threshold=0.001):
         # Plot current Q-value estimates & print max error
         print("Q-value iteration, iteration {}, max error {}".format(i,QIagent.Delta))
         env.render(Q_sa=QIagent.Q_sa,plot_optimal_policy=True,step_pause=0.001)
-        i += 1      
+        i += 1 
  
     return QIagent
 
@@ -71,6 +75,7 @@ def experiment():
 
     # TODO: Compute mean reward per timestep under the optimal policy
     print("Mean reward per timestep under optimal policy: {}".format(np.mean(rs)))
+    print("Sum of rewards under optimal policy: {}".format(np.sum(rs)))
     
 if __name__ == '__main__':
     experiment()
