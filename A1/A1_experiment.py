@@ -6,38 +6,62 @@ from A1_agent import CartPoleAgent
 
 import numpy as np
 import gymnasium as gym
+from tqdm import tqdm
+from matplotlib import pyplot as plt
+from torch import Tensor
 
 
-
-def experiment(n_timesteps = int(1e6), n_envs = 1000, gamma = 1, epsilon = 0.1, TN = False, ER = False):
-    # env = CartPoleEnv(n_envs=n_envs)
-    # states, info = CartPoleEnv.env.reset() 
-
+def experiment(n_timesteps = int(1e6), n_envs = 1000, n_eval_episodes = 50, gamma = 1, epsilon = 0.1, TN = False, ER = False):
     envs = gym.make_vec('CartPole-v1', num_envs= n_envs) # Next_step reset is default
+    eval_envs = gym.make_vec('CartPole-v1', num_envs= n_eval_episodes) # Next_step reset is default
+
     states, info = envs.reset() # Initial states
     DQN_agent = CartPoleAgent(envs, epsilon=0.1)
 
     steps = 0
 
-    if ER:
-        done = np.zeros(shape = n_envs, dtype = bool)
+    # if ER:
+    done = np.zeros(shape = n_envs, dtype = bool)
 
+    pbar = tqdm(total = 100)
+    prog = 0
+    eval_rewards = []
+    timesteps = []
     while steps <= n_timesteps:
         actions = DQN_agent.select_action(states, policy = 'egreedy') # Decide action 
+
         states_next, rewards, terminations, truncations, infos = envs.step(actions)
 
-        DQN_agent.update(states, rewards, states_next)
-        
-        states = states_next
-        
-        steps += np.sum(~done)
-        
-        if ER:
-            done = np.logical_or(terminations, truncations)
+        DQN_agent.update(states, rewards, states_next, done)
 
-    print(f'Took {steps} steps.')
+        states = states_next
+        # print(type(states))
+        
+        done = np.logical_or(terminations, truncations)
+
+        #Not sure if this is true
+        if ER:
+            steps += np.sum(~done)
+        else:
+            steps += n_envs
+        
+        eval_rewards.append(DQN_agent.evaluate(eval_envs, eval_envs.observation_space.shape[0])) #Evaluate in every loop, e.g. after n_env steps
+        timesteps.append(steps)
+
+        #TQDM bar update
+        prog_i = np.floor((steps/n_timesteps)*100).astype(int)
+        pbar.update(prog_i - prog)
+        prog = prog_i
     
     envs.close()
+    pbar.close()
+
+    plt.figure()
+    plt.scatter(timesteps,eval_rewards, c = 'black')
+    plt.xlabel('Number of steps')
+    plt.ylabel('Mean evaluation reward over 50 episodes')
+    plt.show()
+
 
 if __name__ == '__main__':
     experiment()

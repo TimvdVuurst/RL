@@ -59,7 +59,7 @@ class BaseAgent:
                 raise KeyError("Provide an epsilon")
             
             elif self.epsilon >= np.random.rand(): # Random possibility for random motion
-                a = np.random.choice(self.n_actions)
+                a = np.random.choice(self.n_actions, size = self.env.observation_space.shape[0])
             else:
                 a = torch_argmax(self.policy_net(s),dim = 1)  # Otherwise greedy choice
            
@@ -72,43 +72,47 @@ class BaseAgent:
         raise NotImplementedError('For each agent you need to implement its specific back-up method') 
 
 
-    def evaluate(self,eval_env,n_eval_episodes=30, max_episode_length=100, verbose = False):
-        returns = []  # list to store the reward per episode
-        for i in range(n_eval_episodes):
-            s = eval_env.reset()
-            R_ep = 0
-            for t in range(max_episode_length):
-                a = self.select_action(s, 'greedy')
-                s_prime, r, done = eval_env.step(a)
-                R_ep += r
-                if done:
-                    break
-                else:
-                    s = s_prime
-            returns.append(R_ep)
+    def evaluate(self,eval_env,n_eval_episodes=50, max_episode_length = 500, verbose = False):
+        returns = np.zeros(shape=n_eval_episodes)  # list to store the reward per episode
+        done = np.zeros(shape = n_eval_episodes, dtype = bool)
+
+        s, _ = eval_env.reset() #initialize
+        while (np.sum(done) < n_eval_episodes) and (np.sum(done) < max_episode_length): # We work with the internal max episode length of 500 or another manual one
+            a = self.select_action(s, 'greedy')
+            s_prime, rewards, terminations, truncations, infos = eval_env.step(a)
+            returns[~done] += rewards[~done] #only update rewards of non-terminated envs
+            s[~done] = s_prime[~done] # Only update non-terminated states
+            done += np.logical_or(terminations, truncations) # Mask of terminated envs
+
         mean_return = np.mean(returns)
         return mean_return
 
 
 class CartPoleAgent(BaseAgent):
     
-    def update(self, states, rewards, states_next, TN = False, ER = False):
+    def update(self, states, rewards, states_next, done, TN = False, ER = False):
         #TODO: check if this here is the best course of action or if it shouldnt be in experiemnt.py
         states = Tensor(states)
+        rewards = Tensor(rewards)
         states_next = Tensor(states_next)
 
-        q_values = self.policy_net(states) # NN prediction over actions
-
+        q_values = torch.max(self.policy_net(states), 1)[0] # NN prediction over actions
         # Q-value prediction
         q_values_next = self.policy_net(states_next) # NN prediction of following states
-        target = rewards + self.gamma * np.max(q_values_next, axis = 1) # (moving) target value
+        max_a_q = torch.max(q_values_next, 1)[0]
+        
+        # Target rule by Minh et al 2013
+        target = Tensor(np.zeros_like(done))
+        target[~done] = rewards[~done] + self.gamma * max_a_q[~done] # (moving) target value
+        target[done] = rewards[done]
+
 
         # Calculate loss
-        loss = nn.MSE()(q_values, target)
+        loss = nn.MSELoss()(q_values, target)
 
         #Backpropagate
         self.optimizer.zero_grad() # Reset gradients
-        loss.backwards() 
+        loss.backward() 
         self.optimizer.step() 
 
     # def backpropagate(self,losses):
