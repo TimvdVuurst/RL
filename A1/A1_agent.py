@@ -20,12 +20,23 @@ class DQN(nn.Module):
         self.fc1 = nn.Linear(input_dim, 128)
         self.fc2 = nn.Linear(128, 128)
         self.fc3 = nn.Linear(128, output_dim)
+        
+        self.softmax = nn.Softmax(dim = 0) #change to dim = 1 for vectorized input
+        self.relu = nn.ReLU()
     
     def forward(self, x):
-        x = torch.relu(self.fc1(x))
-        x = self.dropout(x)
-        x = torch.relu(self.fc2(x))
-        return self.fc3(x)
+        x = self.relu(self.fc1(x))
+        # x = self.dropout(x)
+        x = self.relu(self.fc2(x))
+        x = self.fc3(x)
+        return x
+
+class CustomSquareLoss(nn.Module):
+    def __init__(self):
+        super(CustomSquareLoss, self).__init__()
+    
+    def forward(self, pred, target):
+        return torch.sum(torch.square(pred - target))  # Custom loss
 
 class BaseAgent:
     # Highly inspired by Thomas Moerland's implementation (RL course 2023)
@@ -46,27 +57,40 @@ class BaseAgent:
 
         #Optimizer and loss
         self.optimizer = optim.Adam(self.policy_net.parameters(), lr = self.learning_rate)
-        # self.loss_function = nn.MSELoss()
+        self.loss_function = CustomSquareLoss()
+    
+
             
     def select_action(self, s, policy='egreedy'):
         s = Tensor(s)
+        num = self.env.observation_space.shape[0]
         policy = policy.lower()
         if policy == 'greedy':
-            a = torch_argmax(self.policy_net(s),dim = 1)
+            with torch.no_grad():
+                a = torch_argmax(self.policy_net(s),dim = 1)
 
         elif policy == 'egreedy':
             if self.epsilon is None:
                 raise KeyError("Provide an epsilon")
             
-            elif self.epsilon >= np.random.rand(): # Random possibility for random motion
-                a = np.random.choice(self.n_actions, size = self.env.observation_space.shape[0])
+            if num > 1:
+                a = np.zeros(num)
+                random_mask = self.epsilon >= np.random.rand(num) 
+                a[random_mask] = np.random.choice(self.n_actions, size = random_mask.sum())
+                with torch.no_grad():
+                    a[~random_mask] = torch.argmax(self.policy_net(s[~random_mask]), dim = 1)
+
             else:
-                a = torch_argmax(self.policy_net(s),dim = 1)  # Otherwise greedy choice
-           
+                if self.epsilon >= np.random.rand():
+                    a = np.random.choice(self.n_actions)
+                else:
+                    with torch.no_grad():
+                        a = torch.argmax(self.policy_net(s))
+
         else:
             raise ValueError("Invalid policy given.")
         
-        return np.array(a)
+        return np.array(a).astype(np.int32)
         
     def update(self):
         raise NotImplementedError('For each agent you need to implement its specific back-up method') 
@@ -77,12 +101,18 @@ class BaseAgent:
         done = np.zeros(shape = n_eval_episodes, dtype = bool)
 
         s, _ = eval_env.reset() #initialize
-        while (np.sum(done) < n_eval_episodes) and (np.sum(done) < max_episode_length): # We work with the internal max episode length of 500 or another manual one
+
+        while (np.sum(done) < eval_env.observation_space.shape[0]): 
             a = self.select_action(s, 'greedy')
             s_prime, rewards, terminations, truncations, infos = eval_env.step(a)
-            returns[~done] += rewards[~done] #only update rewards of non-terminated envs
-            s[~done] = s_prime[~done] # Only update non-terminated states
-            done += np.logical_or(terminations, truncations) # Mask of terminated envs
+            
+            # returns[~done] += rewards[~done] # Only update rewards of non-terminated envs
+            # s[~done] = s_prime[~done] # Only update non-terminated states
+            
+            returns += rewards
+            s = s_prime # Only update non-terminated states
+            
+            done += np.logical_or(terminations, truncations) # Mask of terminated envs, checks termination and max_episode length inherently
 
         mean_return = np.mean(returns)
         return mean_return
@@ -90,32 +120,52 @@ class BaseAgent:
 
 class CartPoleAgent(BaseAgent):
     
-    def update(self, states, rewards, states_next, done, TN = False, ER = False):
+    def update(self, states, rewards, actions, states_next, done, TN = False, ER = False):
         #TODO: check if this here is the best course of action or if it shouldnt be in experiemnt.py
         states = Tensor(states)
         rewards = Tensor(rewards)
         states_next = Tensor(states_next)
 
-        q_values = torch.max(self.policy_net(states), 1)[0] # NN prediction over actions
+        action_index = torch.tensor([[int(a)] for a in actions]) 
+
+        q_values = torch.flatten(torch.gather(self.policy_net(states),1,action_index)) # NN prediction over actions
         # Q-value prediction
-        q_values_next = self.policy_net(states_next) # NN prediction of following states
-        max_a_q = torch.max(q_values_next, 1)[0]
+        q_values_next = torch.flatten(torch.gather(self.policy_net(states_next),1,action_index))
         
         # Target rule by Minh et al 2013
-        target = Tensor(np.zeros_like(done))
-        target[~done] = rewards[~done] + self.gamma * max_a_q[~done] # (moving) target value
-        target[done] = rewards[done]
-
+        target = rewards.detach().clone() # It gets the reward regardless
+        target[np.invert(done)] += self.gamma * q_values_next[np.invert(done)] # Additional info for non-terminal states i+1
+        # target[done] = rewards[done]
 
         # Calculate loss
-        loss = nn.MSELoss()(q_values, target)
+        loss = self.loss_function(q_values, target)
 
         #Backpropagate
         self.optimizer.zero_grad() # Reset gradients
         loss.backward() 
-        self.optimizer.step() 
+        self.optimizer.step()
 
-    # def backpropagate(self,losses):
+    def update_single(self, states, rewards, states_next, done, TN = False, ER = False):
+        #TODO: check if this here is the best course of action or if it shouldnt be in experiemnt.py
+        states = Tensor(states)
+        rewards = Tensor(rewards)
+        states_next = Tensor(states_next)
+
+        # Target rule by Minh et al 2013
+        target = rewards.detach().clone() # It gets the reward regardless,
+
+        for (s, r, s_next, d, t) in zip(states, rewards, states_next, done, target): #Loop over parallel environments
+
+            Q = torch.max(self.policy_net(s))
+            Q_next = torch.max(self.policy_net(s_next))
+
+            if d: # for terminated next states
+                t += self.gamma * Q_next
+            
+            loss = self.loss_function(Q, target)
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
 
 
 
